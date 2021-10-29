@@ -1,0 +1,121 @@
+<html>
+
+    <head>
+
+        <meta charset='utf-8' />
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link rel="icon" href="style/favicon.png">
+        <title>Agenda</title>
+
+        <!-- jquery-2.1.4 --> <!-- src="script/jquery-2.1.4.min.js" -->
+        <script
+			  src="https://code.jquery.com/jquery-2.1.4.min.js"
+			  integrity="sha256-8WqyJLuWKRBVhxXIL1jBDD7SDxU936oZkCnxQbWwJVw="
+			  crossorigin="anonymous"></script>
+
+        <!-- jquery-mobile -->
+        <link rel="stylesheet" href="jquery-mobile/style/jquery.mobile-1.4.5.min.css"/>
+        <script src="jquery-mobile/lib/jquery.mobile-1.4.5.min.js"></script>
+
+        <!-- custom -->
+        <link rel="stylesheet" href="style/custom.css"/>
+        <script src="script/custom.js"></script>
+
+        <!-- document.ready -->
+        <script>
+
+            var myCookie = getCookie("agenda");
+            if (myCookie != null) {
+              window.location = "index.html";
+            }
+
+            $(document).ready(function() {
+
+              $('#submit').click(function(){
+                var userValue = $('#username').val();
+                var pwdValue = $('#password').val();
+
+                $.ajax({
+                    type: "POST",
+                    url: 'php/login.php',
+                    data: ({ username : userValue, password: pwdValue }),
+                    dataType: "html",
+                    success: function(data) {
+                        checkLogin( data );
+                        return data;
+                    },
+                    error: function() {
+                        console.log('Error occured');
+                    }
+                });//ajax
+
+              });//click
+
+              function checkLogin(data){
+                if(data == "ok"){
+                  window.location = "index.html";
+                }
+              };
+
+            });//jq
+
+        </script>
+
+        <!-- local css !-->
+        <style>
+
+          .outer {
+            height: 400px;
+            width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            resize: both;
+            overflow: auto;
+          }
+          .inner {
+            background: #f1f1f1;
+            color: #212121;
+            width: 100%;
+            padding: 20px;
+            resize: both;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+          }
+          .ui-btn{
+            margin-top: 30px;
+          }
+        </style>
+
+    </head>
+
+    <body>
+      <div data-role="page">
+
+      	<div role="main" class="ui-content">
+
+        <div class="outer">
+
+          <div class="inner">
+              <label for="username"><b>Username</b></label>
+              <input type="text" name="username" id="username">
+
+              <label for="password"><b>Password</b></label>
+              <input type="password" name="password" id="password">
+
+              <input type="button" id="submit" value="Accedi" data-icon="check" data-theme="a">
+          </div>
+
+        </div>
+
+      	</div><!-- /content -->
+
+      </div><!-- /page -->
+    </body>
+
+</html>

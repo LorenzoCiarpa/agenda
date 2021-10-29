@@ -1,0 +1,1247 @@
+<html>
+
+    <head>
+
+        <meta charset='utf-8' />
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link rel="icon" href="style/favicon.png">
+        <title>Agenda</title>
+
+        <!-- jquery-2.1.4 --> <!-- src="script/jquery-2.1.4.min.js" -->
+        <script
+			  src="https://code.jquery.com/jquery-2.1.4.min.js"
+			  integrity="sha256-8WqyJLuWKRBVhxXIL1jBDD7SDxU936oZkCnxQbWwJVw="
+			  crossorigin="anonymous"></script>
+
+        <!-- jquery-mobile -->
+        <link rel="stylesheet" href="jquery-mobile/style/jquery.mobile-1.4.5.min.css"/>
+        <script src="jquery-mobile/lib/jquery.mobile-1.4.5.min.js"></script>
+
+        <!-- fullcalendar -->
+        <link href='fullcalendar/style/fullcalendar.min.css' rel='stylesheet' />
+        <link href='fullcalendar/style/fullcalendar.print.min.css' rel='stylesheet' media='print' />
+        <script src='fullcalendar/lib/moment.min.js'></script>
+        <script src='fullcalendar/lib/fullcalendar.min.js'></script>
+
+        <!-- custom -->
+        <link rel="stylesheet" href="style/custom.css"/>
+        <script src="script/custom.js"></script>
+
+        <!-- document.ready -->
+        <script>
+
+            var myCookie = getCookie("agenda");
+            if (myCookie == null) {
+                window.location = "login.html";
+            }
+
+            $(document).ready(function() {
+
+                //init popup
+                $('#popup-utente').enhanceWithin().popup();
+                $('#popup-appuntamento').enhanceWithin().popup();
+                $('#popup-sinistro').enhanceWithin().popup();
+                $('#popup-file').enhanceWithin().popup();
+                $('#popup-file-upload').enhanceWithin().popup();
+
+                //get values
+                getNextDates();
+                getActiveClaims();
+                getUnactiveClaims();
+                getGroups();
+
+                //page utenti
+                $('#interfaccia-utenti').hide();
+
+                //popup appuntamento
+                $('#popup-appuntamento-seleziona').hide();
+                $('#interfaccia-utenti-appuntamento').hide();
+
+                //popup sinistro
+                $('#popup-sinistro-seleziona').hide();
+                $('#interfaccia-utenti-sinistro').hide();
+
+                //init fullcalendar
+                $('#calendar').fullCalendar({
+
+                    header: {
+                        left: 'prev',
+                        center: 'title',
+                        right: 'next'
+                    },
+
+                    events: {
+                        url: 'php/query.php?command=getDatesFullcalendar'
+                    },
+
+                    eventClick: function(calEvent, jsEvent, view) {
+
+                        var appuntamento_id = calEvent.id;
+                        var appuntamento_utente_id = calEvent.utente_id;
+                        var appuntamento_title = calEvent.title;
+                        var appuntamento_start = calEvent.start.format('Y-MM-DD HH:mm');
+                        var appuntamento_luogo = calEvent.luogo;
+                        var appuntamento_descrizione = calEvent.descrizione;
+
+                        viewDate(appuntamento_id, appuntamento_utente_id, appuntamento_title, appuntamento_start, appuntamento_luogo, appuntamento_descrizione);
+
+                    },
+
+                    dayClick: function(date, jsEvent, view) {}
+
+                });
+
+                //START Utenti UI
+
+                    //Gestione click su gruppo
+                    $('#ul-gruppi').on('click', 'li.gruppo', function(){
+                        var group_id = this.getAttribute('data-id');
+                        var group_nome = this.getAttribute('data-nome');
+
+                        getUsers(group_id, group_nome, false);
+                    });
+
+                    $('#back-gruppi').click(function() {
+                        $('#interfaccia-gruppi').show(1000);
+                        $('#interfaccia-utenti').hide(1000);
+                    });
+
+                    $('#btn-aggiungi-gruppo').click(function() {
+                        var gruppo_nome = $('#gruppo-nome').val();
+
+                        setGroup(gruppo_nome);
+                    });
+
+                    //Gestione click su utente
+                    $('#ul-utenti').on('click', 'li.utente', function(){
+                        var user_id = this.getAttribute('data-id');
+                        var user_nome = this.getAttribute('data-nome');
+                        var user_cognome = this.getAttribute('data-cognome');
+                        var user_luogo_residenza = this.getAttribute('data-luogo_residenza');
+                        var user_data_nascita = this.getAttribute('data-data_nascita');
+                        var user_descrizione = this.getAttribute('data-descrizione');
+                        var user_numero_telefono = this.getAttribute('data-numero_telefono');
+                        var user_mail = this.getAttribute('data-mail');
+
+                        viewUser(user_id, user_nome, user_cognome, user_luogo_residenza, user_data_nascita, user_descrizione, user_numero_telefono, user_mail);
+                    });
+
+                    //Gestione click su Aggiungi un utente
+                    $('#nuovo-utente').click(function(){
+                        var gruppo_id = $('#gruppo-id').val();
+                        $('#popup-utente-img').attr('data-gruppo_id', gruppo_id);
+                        $('#popup-utente-img').attr('data-id', null);
+
+                        $('#popup-utente-nome').val(null);
+                        $('#popup-utente-cognome').val(null);
+                        $('#popup-utente-luogo_residenza').val(null);
+                        $('#popup-utente-data_nascita').val(null);
+                        $('#popup-utente-descrizione').val(null);
+                        $('#popup-utente-numero_telefono').val(null);
+                        $('#popup-utente-mail').val(null);
+
+                        $('#popup-utente-aggiungi').hide();
+
+                        $('#popup-utente').popup('open');
+                    });
+
+                    $('#gruppo-delete-icon').click(function(){
+                        var gruppo_id = $('#gruppo-id').val();
+
+                        if (confirm("Sei sicuro di volere eliminare il Gruppo?")) {
+                          deleteGroup(gruppo_id);
+
+                          $('#interfaccia-gruppi').show(1000);
+                          $('#interfaccia-utenti').hide(1000);
+                        }
+                    });
+
+                //END Utenti UI
+
+                //START Utenti Popup
+
+                    //Gestione click su popup-utente->Elimina
+                    $('#btn-elimina-utente').click(function(){
+
+                        var utente_id = $('#popup-utente-img').attr('data-id')
+
+                        if( utente_id != null ){
+                          if (confirm("Sei sicuro di volere eliminare l'Utente?")) {
+                              deleteUser(utente_id);
+                              $('#popup-utente').popup('close');
+                          }
+                        }else{
+                          $('#popup-utente').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su popup-utente->Conferma
+                    $('#btn-conferma-utente').click(function(){
+
+                        var gruppo_id = $('#popup-utente-img').attr('data-gruppo_id');
+                        var utente_id = $('#popup-utente-img').attr('data-id');
+
+                        var user_nome = $('#popup-utente-nome').val();
+                        var user_cognome = $('#popup-utente-cognome').val();
+                        var user_luogo_residenza = $('#popup-utente-luogo_residenza').val();
+                        var user_data_nascita = $('#popup-utente-data_nascita').val();
+                        var user_descrizione = $('#popup-utente-descrizione').val();
+                        var user_numero_telefono = $('#popup-utente-numero_telefono').val();
+                        var user_mail = $('#popup-utente-mail').val();
+
+                        if( utente_id != null ){
+                          updateUser(utente_id, user_nome, user_cognome, user_luogo_residenza, user_data_nascita, user_descrizione, user_numero_telefono, user_mail);
+                        }else{
+                          setUser(gruppo_id, user_nome, user_cognome, user_luogo_residenza, user_data_nascita, user_descrizione, user_numero_telefono, user_mail);
+                          $('#popup-utente').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su file
+                    $('#ul-files').on('click', 'li.file', function(){
+                        $('#popup-utente').popup('close');
+
+                        var file_id = this.getAttribute('date-id');
+                        var file_nome = this.getAttribute('date-nome');
+
+                        var utente_id = $('#popup-utente-img').attr('data-id');
+
+                        setTimeout(function(){
+                          viewFile(file_id, file_nome, utente_id);
+                        }, 100);
+                    });
+
+                    //Gestione click su sinistro
+                    $('#ul-sinistri').on('click', 'li.sinistro', function(){
+
+                        $('#popup-utente').popup('close');
+
+                        var sinistro_title = $('#popup-utente-nome').val() + " " + $('#popup-utente-cognome').val();
+                        var sinistro_id = this.getAttribute('date-id');
+                        var sinistro_utente_id = this.getAttribute('date-utente_id');
+
+                        var sinistro_data = this.getAttribute('date-data');
+                        var sinistro_luogo = this.getAttribute('date-luogo');
+                        var sinistro_compagnia_utente = this.getAttribute('date-compagnia_utente');
+                        var sinistro_compagnia_controparte = this.getAttribute('date-compagnia_controparte');
+                        var sinistro_diagnosi = this.getAttribute('date-diagnosi');
+
+                        var sinistro_fisici_visite = this.getAttribute('date-fisici_visite');
+                        var sinistro_fisici_esami = this.getAttribute('date-fisici_esami');
+                        var sinistro_fisici_certificazione = this.getAttribute('date-fisici_certificazione');
+                        var sinistro_fisici_parte = this.getAttribute('date-fisici_parte');
+                        var sinistro_fisici_controparte = this.getAttribute('date-fisici_controparte');
+
+                        var sinistro_materiali_preventivo = this.getAttribute('date-materiali_preventivo');
+                        var sinistro_materiali_perizia = this.getAttribute('date-materiali_perizia');
+                        var sinistro_materiali_liquidazione = this.getAttribute('date-materiali_liquidazione');
+
+                        var sinistro_attivo = this.getAttribute('date-attivo');
+
+                        setTimeout(function(){
+                          viewClaim(sinistro_id, sinistro_utente_id, sinistro_title,
+                                    sinistro_data, sinistro_luogo,
+                                    sinistro_compagnia_utente, sinistro_compagnia_controparte,
+                                    sinistro_diagnosi,
+                                    sinistro_fisici_visite, sinistro_fisici_esami, sinistro_fisici_certificazione,
+                                    sinistro_fisici_parte, sinistro_fisici_controparte,
+                                    sinistro_materiali_preventivo, sinistro_materiali_perizia, sinistro_materiali_liquidazione,
+                                    sinistro_attivo);
+                        }, 100);
+
+                      });
+
+                //END Utenti Popup
+
+                //START Appuntamenti UI
+
+                    //Gestione click su Aggiungi un appuntamento
+                    $('#nuovo-appuntamento').click(function(){
+                        $('#popup-appuntamento-seleziona').hide();
+                        $('#interfaccia-utenti-appuntamento').hide();
+                        $('#interfaccia-gruppi-appuntamento').show();
+                        $('#popup-appuntamento-more').show();
+
+                        $('#popup-appuntamento-img').attr('data-id', null);
+
+                        $('#popup-appuntamento-title').attr('data-utente_id', null);
+                        $('#popup-appuntamento-title').val('Seleziona un utente');
+                        $('#popup-appuntamento-title').button("refresh");
+
+                        $('#popup-appuntamento-data').val(null);
+                        $('#popup-appuntamento-orario').val(null);
+
+                        $('#popup-appuntamento-luogo').val(null);
+                        $('#popup-appuntamento-descrizione').val(null);
+
+                        $('#popup-appuntamento').popup('open');
+                    });
+
+                    //Gestione click su appuntamento
+                    $('#ul-appuntamenti').on('click', 'li.appuntamento', function(){
+                        var appuntamento_id = this.getAttribute('date-id');
+                        var appuntamento_utente_id = this.getAttribute('date-utente_id');
+                        var appuntamento_title = this.getAttribute('date-title');
+                        var appuntamento_start = this.getAttribute('date-start');
+                        var appuntamento_luogo = this.getAttribute('date-luogo');
+                        var appuntamento_descrizione = this.getAttribute('date-descrizione');
+
+                        viewDate(appuntamento_id, appuntamento_utente_id, appuntamento_title, appuntamento_start, appuntamento_luogo, appuntamento_descrizione);
+                    });
+
+                //END Appuntamenti UI
+
+                //START Appuntamenti Popup
+
+                    //Gestione click su popup-appuntamento->Elimina
+                    $('#btn-elimina-appuntamento').click(function(){
+
+                        var appuntamento_id = $('#popup-appuntamento-img').attr('data-id');
+
+                        if( appuntamento_id != null ){
+                          if (confirm("Sei sicuro di volere eliminare l'Appuntamento?")) {
+                              deleteDate(appuntamento_id);
+                              $('#popup-appuntamento').popup('close');
+                          }
+                        }else{
+                          $('#popup-appuntamento').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su popup-appuntamento->Conferma
+                    $('#btn-conferma-appuntamento').click(function(){
+
+                        var appuntamento_id = $('#popup-appuntamento-img').attr('data-id');
+                        var utente_id = $('#popup-appuntamento-title').attr('data-utente_id');
+
+                        var appuntamento_data = $('#popup-appuntamento-data').val();
+                        var appuntamento_orario =$('#popup-appuntamento-orario').val();
+                        var appuntamento_luogo =$('#popup-appuntamento-luogo').val();
+                        var appuntamento_descrizione =$('#popup-appuntamento-descrizione').val();
+
+                        var datetime = appuntamento_data + ' ' + appuntamento_orario;
+
+                        if( appuntamento_id != null ){
+                          updateDate(appuntamento_id, datetime, appuntamento_luogo, appuntamento_descrizione);
+                        } else {
+                          setDate(utente_id, datetime, appuntamento_luogo, appuntamento_descrizione);
+                          $('#popup-appuntamento').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su appuntamento->utente
+                    $('#popup-appuntamento-title').click(function(){
+
+                        var appuntamento_utente_id = $('#popup-appuntamento-title').attr('data-utente_id');
+
+                        if( appuntamento_utente_id != null){  //Visualizza Utente dell'appuntamento
+
+                          $('#popup-appuntamento').popup('close');
+
+                          getUser(appuntamento_utente_id);
+
+                        } else {  //Seleziona Utente per l'appuntamento
+
+                          $('#popup-appuntamento-more').hide(300);
+
+                          $('#ul-gruppi-appuntamento').listview('refresh');
+
+                          $('#ul-utenti-appuntamento').empty();
+
+                          $('#popup-appuntamento-seleziona').show(300);
+
+                        }
+
+                    });
+
+                    //Gestione click su appuntamento->seleziona->gruppo
+                    $('#ul-gruppi-appuntamento').on('click', 'li.gruppo', function(){
+                        var group_id = this.getAttribute('data-id');
+                        var group_nome = this.getAttribute('data-nome');
+
+                        getUsers(group_id, group_nome, 'date');
+                    });
+
+                    //Gestione click su appuntamento->seleziona->utente
+                    $('#ul-utenti-appuntamento').on('click', 'li.utente', function(){
+                        var user_id = this.getAttribute('data-id');
+                        var user_nome = this.getAttribute('data-nome');
+                        var user_cognome = this.getAttribute('data-cognome');
+
+                        $('#popup-appuntamento-seleziona').hide(300);
+
+                        $('#popup-appuntamento-title').attr('data-utente_id', user_id);
+                        $('#popup-appuntamento-title').val( user_nome + ' ' + user_cognome );
+                        $('#popup-appuntamento-title').button("refresh");
+
+                        $('#popup-appuntamento-more').show(300);
+                    });
+
+                    $('#seleziona-back-appuntamento').click(function(){
+                        $('#popup-appuntamento-seleziona').hide(300);
+                        $('#popup-appuntamento-more').show(300);
+                    });
+
+                    $('#seleziona-back-gruppi-appuntamento').click(function(){
+                        $('#interfaccia-utenti-appuntamento').hide(300);
+                        $('#interfaccia-gruppi-appuntamento').show(300);
+                    });
+
+                //END Appuntamenti Popup
+
+                //START Sinistri UI
+
+                    //Gestione click su Aggiungi un sinistro
+                    $('#nuovo-sinistro').click(function(){
+                        $('#popup-sinistro-seleziona').hide();
+                        $('#interfaccia-utenti-sinistro').hide();
+                        $('#interfaccia-gruppi-sinistro').show();
+                        $('#popup-sinistro-more').show();
+
+                        $('#popup-sinistro-img').attr('data-id', null);
+
+                        $('#popup-sinistro-title').attr('data-utente_id', null);
+                        $('#popup-sinistro-title').val('Seleziona un utente');
+                        $('#popup-sinistro-title').button("refresh");
+
+                        $('#popup-sinistro-data').val(null);
+                        $('#popup-sinistro-orario').val(null);
+                        $('#popup-sinistro-luogo').val(null);
+
+                        $('#popup-sinistro-valore').val(null);
+                        $('#popup-sinistro-compagnia-utente').val(null);
+                        $('#popup-sinistro-compagnia-controparte').val(null);
+
+                        $('#popup-sinistro-diagnosi').val(null);
+
+                        $('#popup-sinistro-attivo').val('1').trigger("change");
+
+                        $('#popup-sinistro').popup('open');
+                    });
+
+                    //Gestione click su Aggiungi un sinistro da Utente
+                    $('#utente-nuovo-sinistro').click(function(){
+
+                        $('#popup-sinistro-seleziona').hide();
+                        $('#interfaccia-utenti-sinistro').hide();
+                        $('#interfaccia-gruppi-sinistro').hide();
+                        $('#popup-sinistro-more').show();
+
+                        var utente_id = $('#popup-utente-img').attr('data-id');
+                        var utente_nome = $('#popup-utente-nome').val();
+                        var utente_cognome = $('#popup-utente-cognome').val();
+
+                        $('#popup-sinistro-img').attr('data-id', null);
+
+                        $('#popup-sinistro-title').attr('data-utente_id', utente_id);
+                        $('#popup-sinistro-title').val(utente_nome + ' ' + utente_cognome);
+                        $('#popup-sinistro-title').button("refresh");
+
+                        $('#popup-sinistro-data').val(null);
+                        $('#popup-sinistro-orario').val(null);
+                        $('#popup-sinistro-luogo').val(null);
+
+                        $('#popup-sinistro-valore').val(null);
+                        $('#popup-sinistro-compagnia-utente').val(null);
+                        $('#popup-sinistro-compagnia-controparte').val(null);
+
+                        $('#popup-sinistro-diagnosi').val(null);
+
+                        $('#popup-sinistro-attivo').val('1').trigger("change");
+
+                        $('#popup-utente').popup('close');
+
+                        setTimeout(function(){
+                          $('#popup-sinistro').popup('open');
+                        }, 100);
+
+                    });
+
+                    //Gestione click su sinistri attivi e non attivi
+                    $('#ul-sinistri-attivi, #ul-sinistri-non-attivi').on('click', 'li.sinistro', function(){
+
+                                  var sinistro_nome = this.getAttribute('date-nome');
+                                  var sinistro_cognome = this.getAttribute('date-cognome');
+                                  var sinistro_title = sinistro_nome + " " + sinistro_cognome;
+
+                                  var sinistro_id = this.getAttribute('date-id');
+                                  var sinistro_utente_id = this.getAttribute('date-utente_id');
+                                  var sinistro_data = this.getAttribute('date-data');
+                                  var sinistro_luogo = this.getAttribute('date-luogo');
+                                  var sinistro_compagnia_utente = this.getAttribute('date-compagnia_utente');
+                                  var sinistro_compagnia_controparte = this.getAttribute('date-compagnia_controparte');
+                                  var sinistro_diagnosi = this.getAttribute('date-diagnosi');
+
+                                  var sinistro_fisici_visite = this.getAttribute('date-fisici_visite');
+                                  var sinistro_fisici_esami = this.getAttribute('date-fisici_esami');
+                                  var sinistro_fisici_certificazione = this.getAttribute('date-fisici_certificazione');
+                                  var sinistro_fisici_parte = this.getAttribute('date-fisici_parte');
+                                  var sinistro_fisici_controparte = this.getAttribute('date-fisici_controparte');
+
+                                  var sinistro_materiali_preventivo = this.getAttribute('date-materiali_preventivo');
+                                  var sinistro_materiali_perizia = this.getAttribute('date-materiali_perizia');
+                                  var sinistro_materiali_liquidazione = this.getAttribute('date-materiali_liquidazione');
+
+                                  var sinistro_attivo = this.getAttribute('date-attivo');
+
+                                  setTimeout(function(){
+                                    viewClaim(sinistro_id, sinistro_utente_id, sinistro_title,
+                                              sinistro_data, sinistro_luogo,
+                                              sinistro_compagnia_utente, sinistro_compagnia_controparte,
+                                              sinistro_diagnosi,
+                                              sinistro_fisici_visite, sinistro_fisici_esami, sinistro_fisici_certificazione,
+                                              sinistro_fisici_parte, sinistro_fisici_controparte,
+                                              sinistro_materiali_preventivo, sinistro_materiali_perizia, sinistro_materiali_liquidazione,
+                                              sinistro_attivo);
+                                  }, 100);
+
+                      });
+
+                //END Sinistri UI
+
+                //START Sinistri Popup
+
+                    //Gestione click su popup-sinistro->Elimina
+                    $('#btn-elimina-sinistro').click(function(){
+
+                        var sinistro_id = $('#popup-sinistro-img').attr('data-id');
+
+                        if( sinistro_id != null ){
+                          if (confirm("Sei sicuro di volere eliminare l'Appuntam?")) {
+                              deleteClaim(sinistro_id);
+                              $('#popup-sinistro').popup('close');
+                          }
+                        }else{
+                          $('#popup-sinistro').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su popup-sinistro->Conferma
+                    $('#btn-conferma-sinistro').click(function(){
+
+                        var sinistro_id = $('#popup-sinistro-img').attr('data-id');
+                        var utente_id = $('#popup-sinistro-title').attr('data-utente_id');
+
+                        var sinistro_data = $('#popup-sinistro-data').val();
+                        var sinistro_luogo =$('#popup-sinistro-luogo').val();
+                        var sinistro_compagnia_utente =$('#popup-sinistro-compagnia-utente').val();
+                        var sinistro_compagnia_controparte =$('#popup-sinistro-compagnia-controparte').val();
+                        var sinistro_diagnosi =$('#popup-sinistro-diagnosi').val();
+
+                        var sinistro_fisici_visite = $('#popup-sinistro-fisici-visite').val();
+                        var sinistro_fisici_esami = $('#popup-sinistro-fisici-esami').val();
+                        var sinistro_fisici_certificazione = $('#popup-sinistro-fisici-certificazione').val();
+                        var sinistro_fisici_parte = $('#popup-sinistro-fisici-parte').val();
+                        var sinistro_fisici_controparte = $('#popup-sinistro-fisici-controparte').val();
+                        var sinistro_materiali_preventivo = $('#popup-sinistro-materiali-preventivo').val();
+                        var sinistro_materiali_perizia = $('#popup-sinistro-materiali-perizia').val();
+                        var sinistro_materiali_liquidazione = $('#popup-sinistro-materiali-liquidazione').val();
+
+                        var sinistro_attivo = $('#popup-sinistro-attivo').val();
+
+                        if( sinistro_id != null ){
+
+                          updateClaim(
+                            sinistro_id,
+                            sinistro_data, sinistro_luogo, sinistro_compagnia_utente, sinistro_compagnia_controparte, sinistro_diagnosi,
+                            sinistro_fisici_visite, sinistro_fisici_esami, sinistro_fisici_certificazione,
+                            sinistro_fisici_parte, sinistro_fisici_controparte,
+                            sinistro_materiali_preventivo, sinistro_materiali_perizia, sinistro_materiali_liquidazione,
+                            sinistro_attivo
+                          );
+
+                        } else {
+
+                          setClaim(
+                            utente_id,
+                            sinistro_data,
+                            sinistro_luogo,
+                            sinistro_compagnia_utente,
+                            sinistro_compagnia_controparte,
+                            sinistro_diagnosi,
+                            sinistro_fisici_visite,
+                            sinistro_fisici_esami,
+                            sinistro_fisici_certificazione,
+                            sinistro_fisici_parte,
+                            sinistro_fisici_controparte,
+                            sinistro_materiali_preventivo,
+                            sinistro_materiali_perizia,
+                            sinistro_materiali_liquidazione,
+                            sinistro_attivo
+                          );
+
+                          $('#popup-sinistro').popup('close');
+                        }
+
+                    });
+
+                    //Gestione click su sinistro->utente
+                    $('#popup-sinistro-title').click(function(){
+
+                        var sinistro_utente_id = $('#popup-sinistro-title').attr('data-utente_id');
+
+                        if( sinistro_utente_id != null){  //Visualizza Utente dell'sinistro
+
+                          $('#popup-sinistro').popup('close');
+
+                          setTimeout(function(){
+                            getUser(sinistro_utente_id);
+                          }, 100);
+
+                        } else {  //Seleziona Utente per l'sinistro
+
+                          $('#popup-sinistro-more').hide(300);
+
+                          $('#ul-gruppi-sinistro').listview('refresh');
+
+                          $('#ul-utenti-sinistro').empty();
+
+                          $('#popup-sinistro-seleziona').show(300);
+
+                        }
+
+                    });
+
+                    //Gestione click su sinistro->seleziona->gruppo
+                    $('#ul-gruppi-sinistro').on('click', 'li.gruppo', function(){
+                        var group_id = this.getAttribute('data-id');
+                        var group_nome = this.getAttribute('data-nome');
+
+                        getUsers(group_id, group_nome, 'claim');
+                    });
+
+                    //Gestione click su sinistro->seleziona->utente
+                    $('#ul-utenti-sinistro').on('click', 'li.utente', function(){
+                        var user_id = this.getAttribute('data-id');
+                        var user_nome = this.getAttribute('data-nome');
+                        var user_cognome = this.getAttribute('data-cognome');
+
+                        $('#popup-sinistro-seleziona').hide(300);
+
+                        $('#popup-sinistro-title').attr('data-utente_id', user_id);
+                        $('#popup-sinistro-title').val( user_nome + ' ' + user_cognome );
+                        $('#popup-sinistro-title').button("refresh");
+
+                        $('#popup-sinistro-more').show(300);
+                    });
+
+                    $('#seleziona-back-sinistro').click(function(){
+                        $('#popup-sinistro-seleziona').hide(300);
+                        $('#popup-sinistro-more').show(300);
+                    });
+
+                    $('#seleziona-back-gruppi-sinistro').click(function(){
+                        $('#interfaccia-utenti-sinistro').hide(300);
+                        $('#interfaccia-gruppi-sinistro').show(300);
+                    });
+
+                //END Sinistri Popup
+
+                //START File Popup
+
+                    //Gestione click su Torna indietro
+                    $('#back-utente-file').click(function(){
+                      $('#popup-file').popup('close');
+
+                      setTimeout(function(){
+                          $('#popup-utente').popup('open');
+                      }, 100);
+                    });
+
+                    $('#back-utente-file-upload').click(function(){
+                      $('#popup-file-upload').popup('close');
+
+                      setTimeout(function(){
+                          $('#popup-utente').popup('open');
+                      }, 100);
+                    });
+
+                    //Gestione click su Elimina file
+                    $('#btn-elimina-file').click(function(){
+                      var file_id = $('#popup-file-id').val();
+                      var utente_id = $('#popup-file-utente_id').val();
+
+                      if (confirm("Sei sicuro di volere eliminare il File?")) {
+                          deleteFile(file_id, utente_id);
+
+                          $('#popup-file').popup('close');
+
+                          setTimeout(function(){
+                              $('#popup-utente').popup('open');
+                          }, 100);
+                      }
+                    });
+
+                    //Gestione click su Download file
+                    $('#btn-download-file').click(function(){
+                      var file_id = $('#popup-file-id').val();
+                      var url = "php/download.php?id=" + file_id;
+
+                      document.getElementById('my_iframe').src = url;
+                    });
+
+                //END File Popup
+
+                //START File Upload Popup
+
+                    //Gestione click su Aggiungi un file da Utente
+                    $('#utente-nuovo-file').click(function(){
+                        var utente_id = $('#popup-utente-img').attr('data-id');
+                        $('#popup-file-upload-utente_id').val( utente_id );
+                        $('#popup-file-file').val('');
+
+                        $('#popup-utente').popup('close');
+
+                        setTimeout(function(){
+                          $('#popup-file-upload').popup('open');
+                        }, 100);
+
+                    });
+
+                    //Gestione click su Conferma
+                    $("form").submit(function(e) {
+                      e.preventDefault();
+
+                      var file = $('#popup-file-file').prop('files')[0]
+                      var utente_id = $('#popup-file-upload-utente_id').val()
+
+                      if ( !file ){
+                        alert('Seleziona un file');
+                        return false;
+                      }
+
+                      var fd = new FormData();
+                      fd.append("file_inviato", file);
+                      fd.append("utente_id", utente_id);
+
+                      var xhr = new XMLHttpRequest();
+                      xhr.open('POST', 'php/upload.php', true);
+
+                      xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                          var percentComplete = (e.loaded / e.total) * 100;
+                          //console.log(percentComplete + '% uploaded');
+                        }
+                      };
+
+                      xhr.onload = function() {
+                        if (this.status == 200) {
+                          var resp = this.response;
+
+                          if(resp == 'ok'){
+                            alert('File caricato con successo');
+
+                            getFiles(utente_id);
+
+                            $('#popup-file-upload').popup('close');
+
+                            setTimeout(function(){
+                              $('#popup-utente').popup('open');
+                            }, 100);
+                          } else {
+                            alert('Errore:\n' + resp);
+                          }
+
+                        };
+                      };
+                      xhr.send(fd);
+                    });
+                //END File Upload Popup
+
+                //Logout
+                $('.logout').click( function(){
+                  deleteCookie('agenda');
+                  window.location = "login.html";
+                });
+
+            });
+        </script>
+
+    </head>
+
+    <body>
+            <!-- START page calendario -->
+            <div data-role="page" id="calendario">
+
+                <div data-role="header" data-theme='b'>
+                        <nav data-role="navbar" data-iconpos="top">
+                            <ul>
+                                <li><a href="#calendario" data-icon="calendar" class="ui-btn-active ui-state-persist">Calendario</a></li>
+                                <li><a href="#utenti" data-icon="user">Utenti</a></li>
+                                <li><a href="#sinistri" data-icon="bullets">Sinistri</a></li>
+                                <li><a class="logout" data-icon="action">Esci</a></li>
+                            </ul>
+                        </nav>
+                </div><!-- /header -->
+
+                <div role="main" class="ui-content container">
+
+                    <div class="ui-body ui-body-a ui-corner-all">
+
+                        <div id='calendar'></div>
+
+                    </div>
+
+                    <input type='button' id='nuovo-appuntamento' value='Aggiungi un nuovo appuntamento' data-icon='plus' data-theme='b'>
+
+                    <div class="ui-corner-all custom-corners">
+
+                        <div class="collapsibleset">
+
+                            <div data-role="collapsible" data-theme='a'>
+
+                                <h3>Prossimi appuntamenti</h3>
+
+                                <ul data-role="listview" data-inset="true" data-filter="true" id="ul-appuntamenti"></ul>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div><!-- /content -->
+
+            </div>
+            <!-- /END page calendario -->
+
+            <!-- START page utenti -->
+            <div data-role="page" id="utenti">
+
+                <div data-role="header" data-theme='b'>
+                        <nav data-role="navbar" data-iconpos="top">
+                            <ul>
+                                <li><a href="#calendario" data-icon="calendar">Calendario</a></li>
+                                <li><a href="#utenti" data-icon="user" class="ui-btn-active ui-state-persist">Utenti</a></li>
+                                <li><a href="#sinistri" data-icon="bullets">Sinistri</a></li>
+                                <li><a class="logout" data-icon="action">Esci</a></li>
+                            </ul>
+                        </nav>
+                </div><!-- /header -->
+
+                <div role="main" class="ui-content container">
+
+                    <div id = 'interfaccia-gruppi'>
+
+                        <div class="ui-corner-all custom-corners">
+
+                            <div class="collapsibleset">
+
+                                <div data-role="collapsible" data-theme='b' id='collapsible-gruppi'>
+
+                                    <h3 class="collapsible-center">Aggiungi un nuovo gruppo</h3>
+
+                                    <div class='ui-field-contain'>
+                                        <label> <b>Nome</b> </label>
+                                        <input type='text' id='gruppo-nome'>
+                                    </div>
+
+                                    <fieldset class='ui-grid-a'>
+                                        <div class='ui-block-a' style="float:right;">
+                                            <input type='button' value='Aggiungi' data-icon='check' data-theme='b' id='btn-aggiungi-gruppo'>
+                                        </div>
+                                    </fieldset>
+
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="ui-body ui-body-a ui-corner-all">
+
+                            <ul data-role="listview" data-inset="true" data-filter="true" id="ul-gruppi"></ul>
+
+                        </div>
+
+                    </div>
+
+                    <div id = 'interfaccia-utenti'>
+
+                        <div id='gruppo-info'>
+                          <h1 id='gruppo-nome-h1'></h1>
+                          <img src="style/delete-icon.png" id="gruppo-delete-icon" height="16px" width="16px" />
+                        </div>
+
+                        <input type='button' id='back-gruppi' value='Torna indietro' data-icon='back' data-theme='a'>
+
+                        <input type='button' id='nuovo-utente' value='Aggiungi un nuovo utente' data-icon='plus' data-theme='b'>
+
+                        <div class="ui-body ui-body-a ui-corner-all">
+
+                            <ul data-role="listview" data-inset="true" data-filter="true" id="ul-utenti"></ul>
+
+                        </div>
+
+                    </div>
+
+                </div><!-- /content -->
+
+            </div>
+            <!-- /END page utenti -->
+
+            <!-- START page sinistri -->
+            <div data-role="page" id="sinistri">
+
+                <div data-role="header" data-theme='b'>
+                        <nav data-role="navbar" data-iconpos="top">
+                            <ul>
+                                <li><a href="#calendario" data-icon="calendar">Calendario</a></li>
+                                <li><a href="#utenti" data-icon="user">Utenti</a></li>
+                                <li><a href="#sinistri" data-icon="bullets" class="ui-btn-active ui-state-persist">Sinistri</a></li>
+                                <li><a class="logout" data-icon="action">Esci</a></li>
+                            </ul>
+                        </nav>
+                </div><!-- /header -->
+
+                <div role="main" class="ui-content container">
+
+                  <input type='button' id='nuovo-sinistro' value='Aggiungi un nuovo sinistro' data-icon='plus' data-theme='b'>
+
+                  <div class="ui-corner-all custom-corners">
+
+                      <div class="collapsibleset">
+
+                          <div data-role="collapsible" data-theme='a'>
+
+                              <h3>Sinistri attivi</h3>
+
+                              <ul data-role="listview" data-inset="true" data-filter="true" id="ul-sinistri-attivi"></ul>
+
+                          </div>
+
+                      </div>
+
+                  </div>
+
+                    <div class="ui-corner-all custom-corners">
+
+                        <div class="collapsibleset">
+
+                            <div data-role="collapsible" data-theme='a'>
+
+                                <h3>Sinistri non attivi</h3>
+
+                                <ul data-role="listview" data-inset="true" data-filter="true" id="ul-sinistri-non-attivi"></ul>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div><!-- /content -->
+
+            </div>
+            <!-- /END page sinistri -->
+
+            <!-- /START popup utente -->
+            <div data-role="popup" id="popup-utente" data-theme="a" data-overlay-theme="b" class="ui-content popup">
+
+                  <a class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right" href="#" data-rel="back">Close</a>
+
+                  <input id="popup-utente-command" type="hidden">
+
+                  <img border="0" src="style/user-icon.png" alt="Utente" id='popup-utente-img'>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Nome</b> </label>
+                    <input type='text' id='popup-utente-nome'>
+                  </div>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Cognome</b> </label>
+                    <input type='text' id='popup-utente-cognome'>
+                  </div>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Luogo di residenza</b> </label>
+                    <input type='text' id='popup-utente-luogo_residenza'>
+                  </div>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Data di nascita</b> </label>
+                    <input type='date' id='popup-utente-data_nascita'>
+                  </div>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Numero di telefono</b> </label>
+                    <input type='tel' id='popup-utente-numero_telefono'>
+                  </div>
+
+                  <div class='ui-field-contain'>
+                    <label> <b>Email</b> </label>
+                    <input type='email' id='popup-utente-mail'>
+                  </div>
+
+                  <div class='ui-field-contain' data-role="fieldcontain">
+                    <label for="popup-utente-descrizione"> <b>Descrizione</b> </label>
+                    <textarea name="popup-utente-descrizione" id="popup-utente-descrizione"></textarea>
+                  </div>
+
+                   <div class='ui-field-contain' id='popup-utente-aggiungi'>
+
+                      <div class="collapsibleset">
+
+                          <div data-role="collapsible" data-theme='a' id='collapsible-utente-sinistri'>
+
+                              <h3 class="collapsible-center">Sinistri</h3>
+
+                              <input type='button' id='utente-nuovo-sinistro' value='Aggiungi un nuovo sinistro'  data-theme='b' data-icon='plus'>
+
+                              <ul data-role="listview" data-inset="true" id="ul-sinistri"></ul>
+
+                          </div>
+
+                      </div>
+
+                      <div class="collapsibleset">
+
+                          <div data-role="collapsible" data-theme='a' id='collapsible-utente-files'>
+
+                              <h3 class="collapsible-center">Files</h3>
+
+                              <input type='button' id='utente-nuovo-file' value='Aggiungi un nuovo file'  data-theme='b' data-icon='plus'>
+
+                              <ul data-role="listview" data-inset="true" id="ul-files"></ul>
+
+                          </div>
+
+                      </div>
+
+                  </div>
+
+                  <fieldset class='ui-grid-a'>
+                    <input type='button' value='Conferma' data-icon='check' data-theme='b' id='btn-conferma-utente'>
+                    <input type='button' value='Elimina' data-icon='delete' data-theme='a' id='btn-elimina-utente'>
+                  </fieldset>
+
+              </div>
+              <!-- /END popup utente -->
+
+              <!-- /START popup appuntamento -->
+              <div data-role="popup" id="popup-appuntamento" data-theme="a" data-overlay-theme="b" class="ui-content popup">
+
+                  <a class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right" href="#" data-rel="back">Close</a>
+
+                  <div id='popup-appuntamento-more'>
+
+                      <img border="0" src="style/favicon.png" alt="Appuntamento" id='popup-appuntamento-img'>
+
+                      <div class='ui-field-contain'>
+                        <label> <b>Utente</b> </label>
+                        <input type='button' data-iconpos='right' data-icon='arrow-r' data-theme='a' id='popup-appuntamento-title'>
+                      </div>
+
+                      <div class='ui-field-contain'>
+                        <label> <b>Data</b> </label>
+                        <input type='date' id='popup-appuntamento-data'>
+                      </div>
+
+                      <div class='ui-field-contain'>
+                        <label> <b>Ora</b> </label>
+                        <input type='time' id='popup-appuntamento-orario'>
+                      </div>
+
+                      <div class='ui-field-contain'>
+                        <label> <b>Luogo</b> </label>
+                        <input type='text' id='popup-appuntamento-luogo'>
+                      </div>
+
+                      <div class='ui-field-contain' data-role="fieldcontain">
+                        <label for="popup-appuntamento-descrizione"> <b>Descrizione</b> </label>
+                        <textarea name="popup-appuntamento-descrizione" id="popup-appuntamento-descrizione"></textarea>
+                      </div>
+
+                      <fieldset class='ui-grid-a'>
+                        <input type='button' value='Conferma' data-icon='check' data-theme='b' id='btn-conferma-appuntamento'>
+                        <input type='button' value='Elimina' data-icon='delete' data-theme='a' id='btn-elimina-appuntamento'>
+                      </fieldset>
+
+                  </div>
+
+                  <div id='popup-appuntamento-seleziona'>
+
+                      <div id = 'interfaccia-gruppi-appuntamento'>
+                        <input type='button' id='seleziona-back-appuntamento' value='Torna indietro' data-icon='back' data-theme='a'>
+                        <ul data-role="listview" data-inset="true" data-filter="true" id="ul-gruppi-appuntamento"></ul>
+                      </div>
+
+                      <div id = 'interfaccia-utenti-appuntamento'>
+                        <input type='button' id='seleziona-back-gruppi-appuntamento' value='Torna indietro' data-icon='back' data-theme='a'>
+                        <ul data-role="listview" data-inset="true" data-filter="true" id="ul-utenti-appuntamento"></ul>
+                      </div>
+
+                  </div>
+
+              </div>
+              <!-- /END popup appuntamento -->
+
+              <!-- /START popup sinistro -->
+              <div data-role="popup" id="popup-sinistro" data-theme="a" data-overlay-theme="b" class="ui-content popup">
+
+                  <a class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right" href="#" data-rel="back">Close</a>
+
+                  <div id='popup-sinistro-more'>
+
+                      <img border="0" src="style/car-icon.png" alt="sinistro" id='popup-sinistro-img'>
+
+                        <div class='ui-field-contain' style='float:right;'>
+                          <label> <b>Attivo</b> </label>
+                          <select data-role='slider' id='popup-sinistro-attivo' >
+                            <option value='0'>No</option>
+                            <option value='1'>Sì</option>
+                          </select>
+                        </div>
+
+                        <div class='ui-field-contain'>
+                          <label> <b>Utente</b> </label>
+                          <input type='button' data-iconpos='right' data-icon='arrow-r' data-theme='a' id='popup-sinistro-title'>
+                        </div>
+
+                        <div class='ui-field-contain'>
+                          <label> <b>Data</b> </label>
+                          <input type='date' id='popup-sinistro-data'>
+                        </div>
+
+                        <div class='ui-field-contain'>
+                          <label> <b>Luogo dell'incidente</b> </label>
+                          <input type='text' id='popup-sinistro-luogo'>
+                        </div>
+
+                        <div class='ui-field-contain'>
+                          <label> <b>Compagnia utente</b> </label>
+                          <input type='text' id='popup-sinistro-compagnia-utente'>
+                        </div>
+
+                        <div class='ui-field-contain'>
+                          <label> <b>Compagnia controparte</b> </label>
+                          <input type='text' id='popup-sinistro-compagnia-controparte'>
+                        </div>
+
+                        <div class='ui-field-contain' data-role="fieldcontain">
+                          <label for="popup-sinistro-diagnosi"> <b>Diagnosi</b> </label>
+                          <textarea name="popup-sinistro-diagnosi" id="popup-sinistro-diagnosi"></textarea>
+                        </div>
+
+                        <div data-role="collapsible" data-theme='a'>
+                            <h3 class="collapsible-center">Progresso - Danni fisici</h3>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Visite specialistiche</b> </label>
+                              <input type='text' id='popup-sinistro-fisici-visite'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Esami diagnostici</b> </label>
+                              <input type='text' id='popup-sinistro-fisici-esami'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Certificazione di partenza e proseguimenti</b> </label>
+                              <input type='text' id='popup-sinistro-fisici-certificazione'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Relazioni di parte</b> </label>
+                              <input type='text' id='popup-sinistro-fisici-parte'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Visita di controparte</b> </label>
+                              <input type='text' id='popup-sinistro-fisici-controparte'>
+                            </div>
+                        </div>
+
+                        <div data-role="collapsible" data-theme='a'>
+                            <h3 class="collapsible-center">Progresso - Danni materiali</h3>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Preventivo o fattura dei danni subiti</b> </label>
+                              <input type='text' id='popup-sinistro-materiali-preventivo'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Eventuale perizia valutativa</b> </label>
+                              <input type='text' id='popup-sinistro-materiali-perizia'>
+                            </div>
+
+                            <div class='ui-field-contain'>
+                              <label> <b>Liquidazione finale</b> </label>
+                              <input type='text' id='popup-sinistro-materiali-liquidazione'>
+                            </div>
+                        </div>
+
+                      <fieldset class='ui-grid-a'>
+                        <input type='button' value='Conferma' data-icon='check' data-theme='b' id='btn-conferma-sinistro'>
+                        <input type='button' value='Elimina' data-icon='delete' data-theme='a' id='btn-elimina-sinistro'>
+                      </fieldset>
+
+                  </div>
+
+                  <div id='popup-sinistro-seleziona'>
+
+                      <div id = 'interfaccia-gruppi-sinistro'>
+                        <input type='button' id='seleziona-back-sinistro' value='Torna indietro' data-icon='back' data-theme='a'>
+                        <ul data-role="listview" data-inset="true" data-filter="true" id="ul-gruppi-sinistro"></ul>
+                      </div>
+
+                      <div id = 'interfaccia-utenti-sinistro'>
+                        <input type='button' id='seleziona-back-gruppi-sinistro' value='Torna indietro' data-icon='back' data-theme='a'>
+                        <ul data-role="listview" data-inset="true" data-filter="true" id="ul-utenti-sinistro"></ul>
+                      </div>
+
+                  </div>
+
+              </div>
+              <!-- /END popup sinistro -->
+
+              <!-- /START popup file -->
+              <div data-role="popup" id="popup-file" data-theme="a" data-overlay-theme="b" class="ui-content popup">
+
+                  <a class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right" href="#" data-rel="back">Close</a>
+
+                  <input type='button' id='back-utente-file' value='Torna indietro' data-icon='back' data-theme='a'>
+
+                  <input id="popup-file-id" type="hidden">
+                  <center><h1 id="popup-file-nome"></h1></center>
+
+                  <input id="popup-file-utente_id" type="hidden">
+
+                  <fieldset class='ui-grid-a'>
+                    <input type='button' value='Download' data-icon='check' data-theme='b' id='btn-download-file'>
+                    <input type='button' value='Elimina' data-icon='delete' data-theme='a' id='btn-elimina-file'>
+                  </fieldset>
+
+              </div>
+              <!-- /END popup file -->
+
+              <!-- /START popup file -->
+              <div data-role="popup" id="popup-file-upload" data-theme="a" data-overlay-theme="b" class="ui-content popup">
+
+                  <a class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right" href="#" data-rel="back">Close</a>
+
+                  <input type='button' id='back-utente-file-upload' value='Torna indietro' data-icon='back' data-theme='a'>
+
+                  <form enctype="multipart/form-data">
+                    <input type="file" id="popup-file-file" name="file_inviato" data-clear-btn="false" >
+                    <input type="hidden" id="popup-file-upload-utente_id" name="utente_id" >
+                    <input type='submit' id='btn-upload-file' name='btn-upload-file' value='Conferma' data-icon='check' data-theme='b'>
+                  </form>
+
+              </div>
+              <!-- /END popup file -->
+
+              <iframe id="my_iframe" style="display:none;">
+
+    </body>
+
+</html>
